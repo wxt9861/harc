@@ -47,7 +47,7 @@ def main():
     if parsed_args.show_devices:
         print("deviceLists:")
         d = 0
-        for key in deviceList["data"]["deviceLists"]:
+        for key in deviceList["data"]["devices"]:
             print("{:03d}".format(d), ":", key["id"])
             d += 1
 
