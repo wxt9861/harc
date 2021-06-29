@@ -1,11 +1,13 @@
 import argparse
 import sys
 import json
+import shutil
+from datetime import datetime
 
 
 def main():
     if sys.version_info.major < 3:
-        sys.exit("Python 3 requiried")
+        sys.exit("Python 3 required")
 
     arg_parser = create_arg_parser()
     parsed_args = arg_parser.parse_args(sys.argv[1:])
@@ -13,7 +15,6 @@ def main():
     targetEntityId = parsed_args.targetEntityId
 
     # files needed for this script within Home Assistant folder
-    # where these files are normally stored
     files = [
         "core.config_entries",
         "core.device_registry",
@@ -30,7 +31,7 @@ def main():
 
     # show items for selected args
     if parsed_args.show_entries:
-        print("configList Entries")
+        print("Config Entries")
         c = 0
         for key in configList["data"]["entries"]:
             print(
@@ -45,7 +46,7 @@ def main():
             c += 1
 
     if parsed_args.show_devices:
-        print("deviceLists:")
+        print("Devices:")
         d = 0
         for key in deviceList["data"]["devices"]:
             print("{:03d}".format(d), ":", key["id"])
@@ -81,12 +82,16 @@ def main():
                 configId = key["config_entry_id"]
                 for item in restoreList["data"]:
                     if item["state"]["entity_id"] == key["entity_id"]:
-                        entityLastSeen = (item["last_seen"])
+                        entityLastSeen = item["last_seen"]
 
                 print(
-                    "entity ID:", key["entity_id"],
-                    "- Status:", status,
-                    "- Last Seen:", entityLastSeen)
+                    "entity ID:",
+                    key["entity_id"],
+                    "- Status:",
+                    status,
+                    "- Last Seen:",
+                    entityLastSeen,
+                )
                 print("device ID:", key["device_id"])
                 print("config Entry ID:", key["config_entry_id"])
 
@@ -107,7 +112,7 @@ def main():
                         numRelatedConfig += 1
                     deviceCount += 1
 
-                # Confirm and remove from entityList, oherwie skip
+                # Confirm and remove from entityList, otherwise skip
                 # at this point, nothing is written to the file, that step is next
                 removeQuestion = "\nRemove entity " + targetEntityId + " ?"
                 if query_yes_no(removeQuestion, "no") is True:
@@ -133,7 +138,7 @@ def main():
                         # remove from restoreList
                         r = 0
                         for item in restoreList["data"]:
-                            if(item["state"]["entity_id"] == targetEntityId):
+                            if item["state"]["entity_id"] == targetEntityId:
                                 print("Removing restore state")
                                 if restoreList["data"].pop(r):
                                     restoreStateRemove = True
@@ -154,6 +159,12 @@ def main():
         if entityRemoved is True:
             commitQuestion = "\nCommit Changes to file?"
             if query_yes_no(commitQuestion, "no") is True:
+
+                backupQUestion = "\nBackup Files before Commit?"
+                if query_yes_no(backupQUestion, "yes") is True:
+                    for file in files:
+                        backup_file(file, path)
+
                 write_file(entityList, files[2], path)
                 if numRelatedConfig == 1:
                     write_file(configList, files[0], path)
@@ -194,6 +205,19 @@ def read_file(file, path, coreStorage="/.storage/"):
         return loadJson
 
 
+def backup_file(file, path, coreStorage="/.storage/"):
+    """Create backup of files before making changes."""
+
+    timeStamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    originalFile = path + coreStorage + file
+    backupFile = path + coreStorage + file + "_" + timeStamp + ".bak"
+
+    if shutil.copy(originalFile, backupFile):
+        return True
+    else:
+        return False
+
+
 def write_file(data, file, path, coreStorage="/.storage/"):
     """Write to file once ready to commit changes."""
 
@@ -227,9 +251,7 @@ def create_arg_parser():
         description="Python Script to remove unwanted entities",
         prog="Home Assistant Registry Cleaner",
     )
-    parser.add_argument(
-        "configDirectory", help="Home Assistant config directory"
-    )
+    parser.add_argument("configDirectory", help="Home Assistant config directory")
     parser.add_argument("targetEntityId", help="Name of the entityList ID to remove")
     parser.add_argument(
         "--show-devices",
